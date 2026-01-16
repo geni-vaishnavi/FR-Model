@@ -1,8 +1,6 @@
 import pandas as pd
 
-
 # 1 SCORING RULES & WEIGHTS
-
 
 WEIGHTS = {
     "Net Profit Margin": 0.15,
@@ -16,7 +14,6 @@ WEIGHTS = {
 }
 
 # Scoring Thresholds (Value >= Threshold -> Score)
-
 
 RULES = {
     "Net Profit Margin": [
@@ -42,49 +39,57 @@ RULES = {
 
 # 2. CALCULATION ENGINE
 
-
 class APARFinancialModel:
     def __init__(self, data_dict):
         self.data = data_dict
         
     def _calculate_single_year(self, year, prev_year_revenue=None):
-        """Calculates raw ratios for one specific year."""
+        """Calculates raw ratios for one specific year using Excel names."""
         fin = self.data.get(year, {})
         if not fin: return {}
 
         # 1. Net Profit Margin
-        npm = (fin['Net_Profit'] / fin['Revenue']) if fin.get('Revenue') else 0.0
+       
+        npm = (fin['Net Profit'] / fin['Net Sales']) if fin.get('Net Sales') else 0.0
 
         # 2. Sales Growth
+        
         growth = 0.0
-        if prev_year_revenue and fin.get('Revenue'):
-            growth = (fin['Revenue'] - prev_year_revenue) / prev_year_revenue
+        if prev_year_revenue and fin.get('Net Sales'):
+            growth = (fin['Net Sales'] - prev_year_revenue) / prev_year_revenue
 
         # 3. Net CF / EBITDA
-        cf_ebitda = (fin['Operating_Cash_Flow'] / fin['EBITDA']) if fin.get('EBITDA') else 0.0
+        
+        cf_ebitda = (fin['Operating Cash flows'] / fin['EBITDA']) if fin.get('EBITDA') else 0.0
 
         # 4. DSCR
-        dscr = (fin['EBITDA'] / fin['Debt_Service']) if fin.get('Debt_Service') else 0.0
+        
+        dscr = (fin['EBITDA'] / fin['Debt Service']) if fin.get('Debt Service') else 0.0
 
         # 5. ICR
-        icr = (fin['EBIT'] / fin['Interest_Expense']) if fin.get('Interest_Expense') else 0.0
+        
+        icr = (fin['EBIT'] / fin['Interest Payments']) if fin.get('Interest Payments') else 0.0
 
         # 6. Current Ratio
-        curr_ratio = (fin['Current_Assets'] / fin['Current_Liabilities']) if fin.get('Current_Liabilities') else 0.0
+        
+        curr_ratio = (fin['Current Assets'] / fin['Current Liabilities']) if fin.get('Current Liabilities') else 0.0
 
         # 7. Cash Conversion Cycle
+        # Excel Logic: Inventory Days + Receivable Days - Payable Days
         ccc = 0.0
-        if fin.get('COGS') and fin.get('Revenue'):
+        if fin.get('COGS') and fin.get('Net Sales'):
             inv_days = (fin['Inventory'] / fin['COGS']) * 365
-            rec_days = (fin['Trade_Receivables'] / fin['Revenue']) * 365
-            pay_days = (fin['Trade_Payables'] / fin['COGS']) * 365
+            rec_days = (fin['Trade and other receivables'] / fin['Net Sales']) * 365
+            
+            pay_days = (fin['Trade Creditors'] / fin['COGS']) * 365
             ccc = inv_days + rec_days - pay_days
 
         # 8. Leverage (Total Liab / TNW)
-        tnw = fin.get('Shareholders_Equity', 0) - fin.get('Intangible_Assets', 0)
-        leverage = (fin['Total_Liabilities'] / tnw) if tnw else 0.0
+        
+        tnw = fin.get('Shareholders Equity', 0) - fin.get('Intangible assets', 0)
+        leverage = (fin['Total Liabilities'] / tnw) if tnw else 0.0
 
-        # Return dict with EXCEL NAMES
+        
         return {
             "Net Profit Margin": npm,
             "Sales Growth or Turnover Growth": growth,
@@ -98,11 +103,11 @@ class APARFinancialModel:
 
     def get_weighted_ratios(self, eval_year, prev_year, hist_year_revenue):
         """Applies 70% Current / 30% Previous logic."""
-        # Previous Year Ratios
+        
         r_prev = self._calculate_single_year(prev_year, hist_year_revenue)
         
-        # Current Year Ratios (Use prev year revenue for growth calc)
-        prev_rev = self.data[prev_year]['Revenue']
+       
+        prev_rev = self.data[prev_year]['Net Sales']
         r_curr = self._calculate_single_year(eval_year, prev_rev)
 
         final = {}
@@ -119,13 +124,13 @@ class APARFinancialModel:
 def get_score(metric_name, value):
     """Determines score based on metric rules."""
     
-    # Special Case: CCC (Lower is Better)
+    #  CCC (Lower is Better)
     if metric_name == "Cash Conversion Cycle":
         if value <= 30.01: return 600
         elif value <= 60.01: return 300
         return 0
         
-    # Special Case: Leverage (Lower is Better)
+    #  Leverage (Lower is Better)
     if metric_name == "Leverage (Debt / Tangible Net Worth)":
         if value <= 1.00: return 500
         elif value <= 1.70: return 400
@@ -134,7 +139,7 @@ def get_score(metric_name, value):
         elif value <= 3.50: return 100
         return 0
 
-    # Standard Case (Higher is Better)
+    # Standard Case 
     rules = RULES.get(metric_name, [])
     for threshold, score in rules:
         if value >= threshold:
@@ -146,33 +151,52 @@ def get_score(metric_name, value):
 
 
 inputs = {
-    "2020": { "Revenue": 220222.0 },
-    "2021": {
-        "Revenue": 170563.0, "COGS": 93319.0, "Net_Profit": 61926.0,
-        "EBITDA": 67576.0, "EBIT": 67576.0, "Operating_Cash_Flow": 67909.0,
-        "Debt_Service": 70119.0, "Interest_Expense": 5317.0,
-        "Current_Assets": 111109.0, "Current_Liabilities": 105687.0,
-        "Inventory": 7124.0, "Trade_Receivables": 29104.0, "Trade_Payables": 35297.0,
-        "Total_Liabilities": 112566.0, "Shareholders_Equity": 18867.0, "Intangible_Assets": 25.0
+    "2022": { "Net Sales": 116218.0 }, 
+    "2023": {
+        "Net Sales": 117554.0, 
+        "COGS": 93319.0, 
+        "Net Profit": 8917.0,
+        "EBITDA": 14567.0, 
+        "EBIT": 14567.0, 
+        "Operating Cash flows": 14900.0,
+        "Debt Service": 70119.0, 
+        "Interest Payments": 5317.0,
+        "Current Assets": 111109.0, 
+        "Current Liabilities": 105687.0,
+        "Inventory": 7124.0, 
+        "Trade and other receivables": 29104.0, 
+        "Trade Creditors": 35297.0,
+        "Total Liabilities": 112566.0, 
+        "Shareholders Equity": 18867.0, 
+        "Intangible assets": 25.0
     },
-    "2022": {
-        "Revenue": 145572.0, "COGS": 106486.0, "Net_Profit": 17526.0,
-        "EBITDA": 27926.0, "EBIT": 27926.0, "Operating_Cash_Flow": 28582.0,
-        "Debt_Service": 76210.0, "Interest_Expense": 9744.0,
-        "Current_Assets": 161490.0, "Current_Liabilities": 138351.0,
-        "Inventory": 18289.0, "Trade_Receivables": 19641.0, "Trade_Payables": 60131.0,
-        "Total_Liabilities": 153607.0, "Shareholders_Equity": 26392.0, "Intangible_Assets": 15.0
+    "2024": {
+        "Net Sales": 135572.0, 
+        "COGS": 106486.0, 
+        "Net Profit": 7526.0,
+        "EBITDA": 17926.0, 
+        "EBIT": 17926.0, 
+        "Operating Cash flows": 18582.0,
+        "Debt Service": 76210.0, 
+        "Interest Payments": 9744.0,
+        "Current Assets": 161490.0, 
+        "Current Liabilities": 138351.0,
+        "Inventory": 18289.0, 
+        "Trade and other receivables": 19641.0, 
+        "Trade Creditors": 60131.0,
+        "Total Liabilities": 153607.0, 
+        "Shareholders Equity": 26392.0, 
+        "Intangible assets": 15.0
     }
 }
 
 # 4. EXECUTION
 
-
 # Initialize
 model = APARFinancialModel(inputs)
 
-# Calculate Ratios (2022 is Evaluation Year, 2021 is Previous)
-final_ratios = model.get_weighted_ratios("2022", "2021", inputs["2020"]["Revenue"])
+
+final_ratios = model.get_weighted_ratios("2024", "2023", inputs["2022"]["Net Sales"])
 
 # Calculate Scores
 total_score = 0.0
@@ -197,9 +221,8 @@ for name in order:
     weighted_score = score * weight
     total_score += weighted_score
     
-    # Format Value for Display
+    
     if "Margin" in name or "Growth" in name:
-        
         val_str = f"{val:.3f}" 
     else:
         val_str = f"{val:.3f}"
